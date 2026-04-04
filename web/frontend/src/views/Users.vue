@@ -259,11 +259,6 @@ onMounted(() => { loadUsers(); loadMe() })
 }
 .user-form input::placeholder { color: var(--text-dim); }
 
-.btn-create {
-  padding: 8px 20px; background: linear-gradient(135deg, var(--accent), var(--brand-secondary, #818cf8)); color: #fff; border: none;
-  border-radius: 6px; cursor: pointer; transition: all 0.15s;
-}
-.btn-create:hover { opacity: 0.9; }
 .btn-cancel {
   padding: 8px 20px; background: transparent; color: var(--text-secondary);
   border: 1px solid var(--border); border-radius: 6px; cursor: pointer; transition: all 0.15s;
@@ -282,15 +277,6 @@ td { padding: 10px 8px; font-size: 0.9rem; }
 .time { color: var(--text-muted); font-size: 0.8rem; white-space: nowrap; }
 .actions { display: flex; gap: 6px; }
 
-.btn-sm {
-  padding: 4px 10px; background: rgba(148,163,184,0.12); border: 1px solid rgba(148,163,184,0.2); color: #94a3b8;
-  border-radius: 4px; cursor: pointer; font-size: 0.8rem; transition: all 0.15s;
-}
-.btn-sm:hover { background: rgba(148,163,184,0.2); color: #e2e8f0; }
-.btn-sm.warn { color: #f59e0b; }
-.btn-sm.warn:hover { background: rgba(245,158,11,0.15); }
-.btn-sm.danger { color: #ef4444; }
-.btn-sm.danger:hover { background: rgba(239,68,68,0.15); }
 
 .badge { padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
 .badge.admin { background: rgba(139,92,246,0.15); color: #8b5cf6; }

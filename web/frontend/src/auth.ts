@@ -22,7 +22,7 @@ axios.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       logout()
-      window.location.href = '/login'
+      window.location.hash = '#/login'
     }
     return Promise.reject(error)
   }

@@ -1183,7 +1183,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject, onMounted, nextTick } from 'vue'
+import { ref, computed, inject, onMounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import QRCode from 'qrcode'
@@ -1196,6 +1196,11 @@ const requestRestart = inject('requestRestart') as () => void
 
 // --- Tabs ---
 const activeTab = ref('identity')
+
+watch(activeTab, (tab) => {
+  if (tab === 'users') { loadUsers(); loadMe() }
+})
+
 const settingsTabs = [
   { id: 'identity', label: 'Server Identity' },
   { id: 'cluster', label: 'Clustering' },
@@ -1287,7 +1292,12 @@ function formatRelative(d: string): string {
 }
 
 async function loadUsers() {
-  try { const { data } = await axios.get('/api/users'); users.value = data } catch {}
+  try {
+    const { data } = await axios.get('/api/users')
+    users.value = Array.isArray(data) ? data : []
+  } catch (e) {
+    console.error('loadUsers failed:', e)
+  }
 }
 async function loadMe() {
   try { const { data } = await axios.get('/api/auth/me'); myUser.value = data } catch {}
@@ -2306,18 +2316,6 @@ onMounted(async () => {
 }
 .settings-page h2 { margin-bottom: 16px; font-size: 1.5rem; }
 
-/* Tabs */
-.tabs {
-  display: flex; gap: 2px; margin-bottom: 20px; background: var(--bg-card);
-  border-radius: 10px; padding: 4px; border: 1px solid var(--border); flex-wrap: wrap;
-}
-.tab-btn {
-  padding: 8px 14px; background: transparent; border: none;
-  color: var(--text-secondary); border-radius: 8px; cursor: pointer;
-  font-size: 0.82rem; font-weight: 500; transition: all 0.15s; white-space: nowrap;
-}
-.tab-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
-.tab-btn.active { background: var(--accent); color: #fff; }
 .tab-content { animation: fadeIn 0.15s ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -2331,12 +2329,6 @@ onMounted(async () => {
 .username { font-weight: 600; color: var(--text-primary); }
 .time { color: var(--text-muted); font-size: 0.8rem; white-space: nowrap; }
 .actions { display: flex; gap: 6px; }
-.btn-sm { padding: 4px 10px; background: var(--bg-hover); border: none; color: var(--text-secondary); border-radius: 4px; cursor: pointer; font-size: 0.8rem; transition: all 0.15s; }
-.btn-sm:hover { color: var(--text-primary); }
-.btn-sm.warn { color: #f59e0b; }
-.btn-sm.warn:hover { background: rgba(245,158,11,0.15); }
-.btn-sm.danger { color: #ef4444; }
-.btn-sm.danger:hover { background: rgba(239,68,68,0.15); }
 .user-badge { padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
 .user-badge.admin { background: rgba(139,92,246,0.15); color: #8b5cf6; }
 .user-badge.viewer { background: rgba(34,197,94,0.15); color: #22c55e; }
@@ -2406,9 +2398,6 @@ onMounted(async () => {
 }
 .add-row input::placeholder { color: var(--text-dim); }
 
-.btn-primary { padding: 9px 20px; background: linear-gradient(135deg, var(--accent), var(--brand-secondary, #818cf8)); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 0.9rem; white-space: nowrap; transition: all 0.15s; }
-.btn-primary:hover { opacity: 0.9; }
-.btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
 .btn-secondary, .upload-btn { padding: 9px 20px; background: var(--bg-hover); color: var(--text-secondary); border: none; border-radius: 8px; cursor: pointer; font-size: 0.9rem; transition: all 0.15s; }
 .btn-secondary:hover, .upload-btn:hover { color: var(--text-primary); }
 .btn-text { padding: 9px 16px; background: none; color: var(--text-muted); border: none; cursor: pointer; font-size: 0.85rem; transition: color 0.15s; }
@@ -2877,10 +2866,6 @@ onMounted(async () => {
 .bp-cert-pending { color: #f59e0b; font-weight: 600; }
 .bp-cert-none { color: var(--text-dim); }
 .bp-status-empty { color: var(--text-dim); font-size: 0.85rem; padding: 20px 0; text-align: center; }
-.btn-sm {
-  padding: 2px 10px; font-size: 0.72rem; background: var(--accent); color: #fff;
-  border: none; border-radius: 4px; cursor: pointer; margin-left: auto;
-}
 .msg-error { color: #ef4444; font-size: 0.82rem; }
 
 @media (max-width: 768px) {

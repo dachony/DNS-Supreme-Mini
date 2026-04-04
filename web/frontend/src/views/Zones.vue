@@ -681,9 +681,6 @@ onMounted(() => { loadZones(); loadPrimaryDomain(); loadServerHostname() })
 .section-desc { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 16px; line-height: 1.5; }
 .section-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 
-.btn-primary { padding: 9px 20px; background: linear-gradient(135deg, var(--accent), var(--brand-secondary, #818cf8)); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 0.9rem; transition: all 0.15s; }
-.btn-primary:hover { opacity: 0.9; }
-.btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
 .btn-back { padding: 8px 16px; background: var(--bg-hover); border: none; color: var(--text-secondary); border-radius: 8px; cursor: pointer; font-size: 0.85rem; transition: all 0.15s; }
 .btn-back:hover { color: var(--text-primary); }
 .btn-link { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 0.85rem; text-decoration: underline; }

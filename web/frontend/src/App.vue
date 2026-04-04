@@ -490,4 +490,80 @@ table tbody tr:hover { background: var(--bg-hover) !important; }
   font-weight: 600;
   text-decoration: underline;
 }
+
+/* ===== Global Uniform Button Styles ===== */
+.btn-primary {
+  padding: 8px 18px;
+  background: linear-gradient(135deg, var(--accent), var(--brand-secondary, #818cf8));
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.btn-primary:hover { opacity: 0.9; }
+.btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.btn-sm {
+  padding: 5px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.btn-sm:hover { border-color: var(--accent); color: var(--accent); background: var(--bg-hover); }
+.btn-sm.warn { color: #f59e0b; border-color: rgba(245,158,11,0.3); }
+.btn-sm.warn:hover { background: rgba(245,158,11,0.1); border-color: #f59e0b; }
+.btn-sm.danger { color: #ef4444; border-color: rgba(239,68,68,0.3); }
+.btn-sm.danger:hover { background: rgba(239,68,68,0.1); border-color: #ef4444; }
+
+.btn-create {
+  padding: 8px 18px;
+  background: linear-gradient(135deg, var(--accent), var(--brand-secondary, #818cf8));
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.btn-create:hover { opacity: 0.9; }
+
+/* ===== Global Uniform Tab Styles ===== */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+  overflow-x: auto;
+}
+.tab-btn {
+  padding: 10px 18px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.15s;
+  border-radius: 0;
+}
+.tab-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: transparent;
+}
 </style>

@@ -1288,18 +1288,6 @@ onMounted(() => {
 <style scoped>
 .blocklists h2 { margin-bottom: 16px; }
 
-/* Tabs */
-.tabs {
-  display: flex; gap: 2px; margin-bottom: 20px; background: var(--bg-card);
-  border-radius: 10px; padding: 4px; border: 1px solid var(--border);
-}
-.tab-btn {
-  flex: 1; padding: 9px 12px; background: transparent; border: none;
-  color: var(--text-secondary); border-radius: 8px; cursor: pointer;
-  font-size: 0.84rem; font-weight: 500; transition: all 0.15s; white-space: nowrap;
-}
-.tab-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
-.tab-btn.active { background: var(--accent); color: #fff; }
 
 .tab-content { animation: fadeIn 0.15s ease-out; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
