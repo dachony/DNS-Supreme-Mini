@@ -43,7 +43,7 @@
     <main class="content">
       <div v-if="forcePasswordChange" class="force-pw-banner">
         <span>You are using the default admin password. Please change it immediately.</span>
-        <router-link to="/users" class="force-pw-link">Change Password</router-link>
+        <router-link to="/settings?tab=users" class="force-pw-link">Change Password</router-link>
       </div>
       <router-view />
 

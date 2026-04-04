@@ -1,5 +1,5 @@
 import { createApp } from 'vue'
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import App from './App.vue'
 import Dashboard from './views/Dashboard.vue'
 import QueryLog from './views/QueryLog.vue'
@@ -12,7 +12,7 @@ import ResetPassword from './views/ResetPassword.vue'
 import { isAuthenticated, currentUser } from './auth'
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   routes: [
     { path: '/login', component: Login, meta: { public: true } },
     { path: '/reset-password', component: ResetPassword, meta: { public: true } },
@@ -21,7 +21,7 @@ const router = createRouter({
     { path: '/blocklists', component: Blocklists },
     { path: '/zones', component: Zones },
     { path: '/settings', component: Settings, meta: { admin: true } },
-    { path: '/users', component: Users, meta: { admin: true } },
+    { path: '/users', redirect: '/settings?tab=users' },
   ]
 })
 

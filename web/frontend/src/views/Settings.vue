@@ -1184,9 +1184,12 @@
 
 <script setup lang="ts">
 import { ref, computed, inject, onMounted, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import axios from 'axios'
 import QRCode from 'qrcode'
 import { currentUser } from '../auth'
+
+const route = useRoute()
 
 const confirm = inject('confirm') as (opts: any) => Promise<boolean>
 const requestRestart = inject('requestRestart') as () => void
@@ -2263,6 +2266,11 @@ async function handleRestoreFile(e: Event) {
 }
 
 onMounted(async () => {
+  // Handle ?tab=users query param (e.g. from force password change banner)
+  const tabParam = route.query.tab as string
+  if (tabParam && settingsTabs.some(t => t.id === tabParam)) {
+    activeTab.value = tabParam
+  }
   await loadAll()
   loadUsers(); loadMe(); loadCertZones(); loadFail2Ban(); loadMailSettings(); loadAcmeConfig()
   loadBpZones()
