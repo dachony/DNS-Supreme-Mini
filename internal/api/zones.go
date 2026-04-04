@@ -66,14 +66,12 @@ func (s *Server) listZones(c *gin.Context) {
 	// Enrich with record count
 	type zoneInfo struct {
 		db.Zone
-		RecordCount int  `json:"record_count"`
-		DNSSECSigned bool `json:"dnssec_signed"`
+		RecordCount int `json:"record_count"`
 	}
 	result := make([]zoneInfo, len(zones))
 	for i, z := range zones {
 		records, _ := s.db.ListRecords(z.ID)
-		signed := s.dnssec.GetKey(z.Name) != nil
-		result[i] = zoneInfo{Zone: z, RecordCount: len(records), DNSSECSigned: signed}
+		result[i] = zoneInfo{Zone: z, RecordCount: len(records)}
 	}
 	c.JSON(http.StatusOK, result)
 }
@@ -158,13 +156,9 @@ func (s *Server) getZone(c *gin.Context) {
 
 	records, _ := s.db.ListRecords(id)
 
-	// Get DNSSEC info
-	dnssecKey := s.dnssec.GetKey(zone.Name)
-
 	c.JSON(http.StatusOK, gin.H{
 		"zone":    zone,
 		"records": records,
-		"dnssec":  dnssecKey,
 	})
 }
 

@@ -283,10 +283,10 @@ td { padding: 10px 8px; font-size: 0.9rem; }
 .actions { display: flex; gap: 6px; }
 
 .btn-sm {
-  padding: 4px 10px; background: var(--bg-hover); border: none; color: var(--text-secondary);
+  padding: 4px 10px; background: rgba(148,163,184,0.12); border: 1px solid rgba(148,163,184,0.2); color: #94a3b8;
   border-radius: 4px; cursor: pointer; font-size: 0.8rem; transition: all 0.15s;
 }
-.btn-sm:hover { color: var(--text-primary); }
+.btn-sm:hover { background: rgba(148,163,184,0.2); color: #e2e8f0; }
 .btn-sm.warn { color: #f59e0b; }
 .btn-sm.warn:hover { background: rgba(245,158,11,0.15); }
 .btn-sm.danger { color: #ef4444; }

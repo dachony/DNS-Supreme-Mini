@@ -117,18 +117,6 @@ func (s *Server) generateSelfSigned(c *gin.Context) {
 	})
 }
 
-func (s *Server) getCertZones(c *gin.Context) {
-	entries, _ := os.ReadDir("/app/certs")
-	zones := make([]string, 0)
-	for _, e := range entries {
-		name := e.Name()
-		if name != "server.crt" && name != "server.key" && len(name) > 4 && name[len(name)-4:] == ".crt" {
-			zones = append(zones, name[:len(name)-4])
-		}
-	}
-	c.JSON(http.StatusOK, zones)
-}
-
 func (s *Server) deleteCert(c *gin.Context) {
 	certFile := "/app/certs/server.crt"
 	keyFile := "/app/certs/server.key"

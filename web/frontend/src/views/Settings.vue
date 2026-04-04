@@ -615,26 +615,6 @@
       </div>
       </div>
 
-      <!-- Per-zone certificates -->
-      <div class="subsection" style="margin-top:20px">
-        <h4>Zone Certificates</h4>
-        <p class="section-desc">Generate or upload TLS certificates per domain. Useful for DoH and HTTPS block pages with proper domain names.</p>
-        <div v-if="certZones.length" class="cert-zones-list">
-          <div v-for="z in certZones" :key="z.name" class="cert-zone-row">
-            <div class="cert-zone-info">
-              <span class="cert-zone-name">{{ z.name }}</span>
-              <span v-if="z.has_cert" class="cert-zone-status has">Certificate installed</span>
-              <span v-else class="cert-zone-status none">No certificate</span>
-            </div>
-            <div class="cert-zone-actions">
-              <button @click="generateZoneCert(z.name)" class="btn-sm">Generate</button>
-              <button v-if="z.has_cert" @click="exportCert('pem', z.name)" class="btn-sm">Export</button>
-            </div>
-          </div>
-        </div>
-        <div v-else class="empty-small">No zones configured. Create zones first in DNS Zones.</div>
-      </div>
-
       </div><!-- end certs-left -->
 
       <div class="certs-right">
@@ -715,14 +695,6 @@
           </div>
 
           <div class="hiw-section">
-            <h5>Zone Certificates</h5>
-            <p>Each DNS zone can have its own certificate. Useful when:</p>
-            <ul>
-              <li>You host multiple domains</li>
-              <li>Different domains need different certs</li>
-              <li>DoH clients connect to specific domain names</li>
-            </ul>
-            <p>Generate a zone cert below — it creates a self-signed cert with the zone domain and wildcard (*.domain) as SANs.</p>
           </div>
         </div>
       </div><!-- end certs-right -->
@@ -1156,7 +1128,6 @@
               <span class="backup-tag">DNS Records</span>
               <span class="backup-tag">Blocklist Config</span>
               <span class="backup-tag">User Accounts</span>
-              <span class="backup-tag">DNSSEC Keys</span>
               <span class="backup-tag">ACME Config</span>
               <span class="backup-tag">Network Protection</span>
             </div>
@@ -1527,8 +1498,6 @@ async function addForwarderDirect(addr: string) {
   loadAll()
 }
 
-const dnssecKeys = ref<any[]>([])
-const dnssecZone = ref('')
 
 // --- Mail ---
 const mailSettings = ref({
@@ -1719,7 +1688,7 @@ async function loadAcmeStatus() {
 }
 const certZones = ref<any[]>([])
 
-async function loadCertZones() {
+async function loadCertZones() { certZones.value = []; return; // disabled - zone certs removed
   try {
     const { data } = await axios.get('/api/zones')
     const zones = (data || []).map((z: any) => ({ name: z.name, has_cert: false }))

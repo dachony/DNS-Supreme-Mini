@@ -32,7 +32,6 @@ type Server struct {
 	blockPage  *blockpage.Server
 	policies   *filter.PolicyManager
 	dns        *dnsserver.Server
-	dnssec     *dnsserver.DNSSECManager
 	fail2ban      *Fail2Ban
 	mailer        *mailer.Mailer
 	acmeClient    *certs.ACMEClient
@@ -67,7 +66,6 @@ func NewServer(cfg config.APIConfig, database *db.Database, filterEngine *filter
 		acmeClient:    certs.NewACMEClient("/app/certs"),
 		emailMFACodes: make(map[int]emailMFAEntry),
 		sseHub:     newSSEHub(),
-		dnssec:     dnsserver.NewDNSSECManager(),
 		router:     router,
 	}
 
@@ -79,7 +77,6 @@ func NewServer(cfg config.APIConfig, database *db.Database, filterEngine *filter
 	s.LoadBlockPageTemplate()
 	s.loadACMEConfig()
 	s.getClusterFromDB()
-	dnsServer.SetDNSSEC(s.dnssec)
 	s.setupRoutes()
 	go s.broadcastStats()
 	return s
@@ -277,7 +274,7 @@ func (s *Server) setupRoutes() {
 			admin.PUT("/settings/filtering-mode", s.setFilteringMode)
 
 			// Certificate management (write + admin-only reads)
-			admin.GET("/certs/zones", s.getCertZones)
+
 			admin.POST("/certs/generate", s.generateSelfSigned)
 			admin.DELETE("/certs", s.deleteCert)
 			admin.POST("/certs/upload", s.uploadCert)
@@ -299,7 +296,6 @@ func (s *Server) setupRoutes() {
 		// Sub-route groups: viewer GET routes on protected, write routes on admin
 		s.setupLogRoutes(protected, admin)
 		s.setupZoneRoutes(protected, admin)
-		s.setupDNSSECRoutes(protected, admin)
 		s.setupPolicyRoutes(protected, admin)
 		s.setupBackupRoutes(admin)
 	}
@@ -348,9 +344,6 @@ func (s *Server) restartServer(c *gin.Context) {
 func (s *Server) Start() error {
 	addr := fmt.Sprintf("%s:%d", s.cfg.ListenAddr, s.cfg.Port)
 	slog.Info("web UI and API available", "component", "api", "addr", addr)
-
-	// Restore DNSSEC keys from database
-	s.restoreDNSSECKeys()
 
 	// Restore blocklist auto-update schedule
 	if v := s.db.GetSetting("blocklist_update_hours"); v != "" {
