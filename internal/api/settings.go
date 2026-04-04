@@ -158,8 +158,8 @@ func (s *Server) LoadBlockPageTemplate() {
 	}
 	// Try to load dedicated block page cert
 	if domain := s.db.GetSetting("block_page_domain"); domain != "" && s.blockPage != nil {
-		certPath := "/app/certs/" + domain + ".crt"
-		keyPath := "/app/certs/" + domain + ".key"
+		certPath := s.certsDir + "/" + domain + ".crt"
+		keyPath := s.certsDir + "/" + domain + ".key"
 		if _, err := os.Stat(certPath); err == nil {
 			s.blockPage.SetBlockPageCert(certPath, keyPath)
 		}
@@ -224,8 +224,8 @@ func (s *Server) setupBlockPageDomain(c *gin.Context) {
 	s.db.SetSetting("block_page_redirect_url", httpURL)
 
 	// 3. Check if cert already exists
-	certPath := "/app/certs/" + domain + ".crt"
-	keyPath := "/app/certs/" + domain + ".key"
+	certPath := s.certsDir + "/" + domain + ".crt"
+	keyPath := s.certsDir + "/" + domain + ".key"
 	if _, err := os.Stat(certPath); err == nil {
 		// Cert exists — load it and switch to HTTPS
 		if s.blockPage != nil {

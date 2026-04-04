@@ -73,8 +73,19 @@ func main() {
 	netProtect.Start()
 
 	// Initialize TLS
+	certsDir := cfg.DataDir + "/certs"
+	os.MkdirAll(certsDir, 0755)
 	certFile := os.Getenv("TLS_CERT_FILE")
 	keyFile := os.Getenv("TLS_KEY_FILE")
+	if certFile == "" {
+		certFile = certsDir + "/server.crt"
+		keyFile = certsDir + "/server.key"
+	}
+	// Auto-generate self-signed cert on disk if none exists
+	if _, err := os.Stat(certFile); os.IsNotExist(err) {
+		slog.Info("generating self-signed certificate to disk", "component", "tls", "path", certFile)
+		certs.GenerateAndSave(certFile, keyFile, nil)
+	}
 	tlsConfig, err := certs.LoadOrGenerateTLS(certFile, keyFile)
 	if err != nil {
 		slog.Warn("TLS not available", "component", "tls", "error", err)
@@ -175,7 +186,7 @@ func main() {
 	defer dnsServer.Shutdown()
 
 	// Start API server
-	apiServer := api.NewServer(cfg.API, database, filterEngine, netProtect, blockPageServer, dnsServer)
+	apiServer := api.NewServer(cfg.API, database, filterEngine, netProtect, blockPageServer, dnsServer, certsDir)
 	if err := apiServer.Start(); err != nil {
 		slog.Error("failed to start API server", "error", err)
 		os.Exit(1)
@@ -207,15 +218,8 @@ func main() {
 	for s := range sig {
 		if s == syscall.SIGHUP {
 			slog.Info("SIGHUP received, reloading TLS and restarting DNS", "component", "restart")
-			// Reload TLS certificates
-			// Check if user generated a cert in /app/certs/
+			// Reload TLS certificates from data dir
 			reloadCert, reloadKey := certFile, keyFile
-			if reloadCert == "" {
-				if _, err := os.Stat("/app/certs/server.crt"); err == nil {
-					reloadCert = "/app/certs/server.crt"
-					reloadKey = "/app/certs/server.key"
-				}
-			}
 			newTLS, err := certs.LoadOrGenerateTLS(reloadCert, reloadKey)
 			if err == nil && newTLS != nil {
 				dnsServer.ReloadTLS(newTLS)

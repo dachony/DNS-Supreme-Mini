@@ -228,7 +228,7 @@ func humanBytes(b int64) string {
 
 func (s *Server) getCertAlerts() []certAlert {
 	var alerts []certAlert
-	certPath := "/app/certs/server.crt"
+	certPath := s.certsDir + "/server.crt"
 	data, err := os.ReadFile(certPath)
 	if err != nil {
 		return alerts

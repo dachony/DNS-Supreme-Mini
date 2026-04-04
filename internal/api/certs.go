@@ -29,7 +29,7 @@ type certInfo struct {
 func (s *Server) getCerts(c *gin.Context) {
 	certFile := os.Getenv("TLS_CERT_FILE")
 	if certFile == "" {
-		certFile = "/app/certs/server.crt"
+		certFile = s.certsDir + "/server.crt"
 	}
 
 	info, err := readCertInfo(certFile)
@@ -57,15 +57,15 @@ type generateCertReq struct {
 }
 
 func (s *Server) generateSelfSigned(c *gin.Context) {
-	os.MkdirAll("/app/certs", 0755)
+	os.MkdirAll(s.certsDir, 0755)
 
 	var req generateCertReq
 	c.ShouldBindJSON(&req)
 
 	// Zone-specific cert
 	if req.Domain != "" {
-		certFile := "/app/certs/" + req.Domain + ".crt"
-		keyFile := "/app/certs/" + req.Domain + ".key"
+		certFile := s.certsDir + "/" + req.Domain + ".crt"
+		keyFile := s.certsDir + "/" + req.Domain + ".key"
 		cr := &certs.CertRequest{
 			CommonName: req.Domain,
 			DNSNames:   []string{req.Domain, "*." + req.Domain},
@@ -83,8 +83,8 @@ func (s *Server) generateSelfSigned(c *gin.Context) {
 	}
 
 	// Server cert
-	certFile := "/app/certs/server.crt"
-	keyFile := "/app/certs/server.key"
+	certFile := s.certsDir + "/server.crt"
+	keyFile := s.certsDir + "/server.key"
 
 	cr := &certs.CertRequest{
 		CommonName:         req.CommonName,
@@ -118,8 +118,8 @@ func (s *Server) generateSelfSigned(c *gin.Context) {
 }
 
 func (s *Server) deleteCert(c *gin.Context) {
-	certFile := "/app/certs/server.crt"
-	keyFile := "/app/certs/server.key"
+	certFile := s.certsDir + "/server.crt"
+	keyFile := s.certsDir + "/server.key"
 	os.Remove(certFile)
 	os.Remove(keyFile)
 	slog.Info("server certificate deleted", "component", "certs")
@@ -138,12 +138,12 @@ func (s *Server) uploadCert(c *gin.Context) {
 		return
 	}
 
-	os.MkdirAll("/app/certs", 0755)
-	if err := os.WriteFile("/app/certs/server.crt", certData, 0644); err != nil {
+	os.MkdirAll(s.certsDir, 0755)
+	if err := os.WriteFile(s.certsDir + "/server.crt", certData, 0644); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	if err := os.WriteFile("/app/certs/server.key", keyData, 0600); err != nil {
+	if err := os.WriteFile(s.certsDir + "/server.key", keyData, 0600); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -160,11 +160,11 @@ func (s *Server) exportCert(c *gin.Context) {
 
 	certFile := os.Getenv("TLS_CERT_FILE")
 	if certFile == "" {
-		certFile = "/app/certs/server.crt"
+		certFile = s.certsDir + "/server.crt"
 	}
 	// Domain-specific cert file
 	if domain != "" {
-		domainCert := "/app/certs/" + domain + ".crt"
+		domainCert := s.certsDir + "/" + domain + ".crt"
 		if _, err := os.Stat(domainCert); err == nil {
 			certFile = domainCert
 		}
@@ -363,8 +363,8 @@ func (s *Server) loadBlockPageCertIfMatch(domain string) {
 	if bpDomain == "" || domain != bpDomain {
 		return
 	}
-	certPath := "/app/certs/" + domain + ".crt"
-	keyPath := "/app/certs/" + domain + ".key"
+	certPath := s.certsDir + "/" + domain + ".crt"
+	keyPath := s.certsDir + "/" + domain + ".key"
 	if s.blockPage != nil {
 		if err := s.blockPage.SetBlockPageCert(certPath, keyPath); err != nil {
 			slog.Error("failed to load block page cert", "component", "acme", "domain", domain, "error", err)

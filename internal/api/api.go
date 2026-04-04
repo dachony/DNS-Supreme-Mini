@@ -32,6 +32,7 @@ type Server struct {
 	blockPage  *blockpage.Server
 	policies   *filter.PolicyManager
 	dns        *dnsserver.Server
+	certsDir   string
 	fail2ban      *Fail2Ban
 	mailer        *mailer.Mailer
 	acmeClient    *certs.ACMEClient
@@ -42,7 +43,7 @@ type Server struct {
 	router         *gin.Engine
 }
 
-func NewServer(cfg config.APIConfig, database *db.Database, filterEngine *filter.Engine, netProtect *filter.NetProtectEngine, bp *blockpage.Server, dnsServer *dnsserver.Server) *Server {
+func NewServer(cfg config.APIConfig, database *db.Database, filterEngine *filter.Engine, netProtect *filter.NetProtectEngine, bp *blockpage.Server, dnsServer *dnsserver.Server, certsDir string) *Server {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
 	router.Use(gin.Recovery())
@@ -61,9 +62,10 @@ func NewServer(cfg config.APIConfig, database *db.Database, filterEngine *filter
 		blockPage:  bp,
 		policies:   filter.NewPolicyManager(),
 		dns:        dnsServer,
+		certsDir:   certsDir,
 		fail2ban:      NewFail2Ban(),
 		mailer:        mailer.New(),
-		acmeClient:    certs.NewACMEClient("/app/certs"),
+		acmeClient:    certs.NewACMEClient(certsDir),
 		emailMFACodes: make(map[int]emailMFAEntry),
 		sseHub:     newSSEHub(),
 		router:     router,
@@ -372,7 +374,7 @@ func (s *Server) Start() error {
 	}
 	if mgmtHTTPS && s.cfg.HTTPSPort > 0 {
 		httpsAddr := fmt.Sprintf("%s:%d", s.cfg.ListenAddr, s.cfg.HTTPSPort)
-		certFile, keyFile := "/app/certs/server.crt", "/app/certs/server.key"
+		certFile, keyFile := s.certsDir+"/server.crt", s.certsDir+"/server.key"
 		if _, err := os.Stat(certFile); os.IsNotExist(err) {
 			slog.Warn("management HTTPS enabled but no certificate found", "component", "api", "cert", certFile)
 		} else {
