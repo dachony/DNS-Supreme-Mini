@@ -1,7 +1,10 @@
 .git
-.gitignore
-README.md
-docs/
 *.md
+docs/
 .env
 tmp/
+data/
+node_modules/
+web/frontend/node_modules/
+web/frontend/dist/
+docker-compose.yml

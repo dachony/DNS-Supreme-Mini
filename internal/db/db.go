@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"dns-supreme-mini/internal/config"
-
 	_ "modernc.org/sqlite"
 )
 
@@ -30,15 +29,15 @@ type QueryLog struct {
 }
 
 type Stats struct {
-	TotalQueries    int64            `json:"total_queries"`
-	BlockedQueries  int64            `json:"blocked_queries"`
-	AllowedQueries  int64            `json:"allowed_queries"`
-	BlockedPercent  float64          `json:"blocked_percent"`
-	TopDomains      []DomainCount    `json:"top_domains"`
-	TopBlocked      []DomainCount    `json:"top_blocked"`
-	TopClients      []ClientCount    `json:"top_clients"`
-	QueryTypes      []QueryTypeCount `json:"query_types"`
-	QueriesOverTime []TimeCount      `json:"queries_over_time"`
+	TotalQueries   int64            `json:"total_queries"`
+	BlockedQueries int64            `json:"blocked_queries"`
+	AllowedQueries int64            `json:"allowed_queries"`
+	BlockedPercent float64          `json:"blocked_percent"`
+	TopDomains     []DomainCount    `json:"top_domains"`
+	TopBlocked     []DomainCount    `json:"top_blocked"`
+	TopClients     []ClientCount    `json:"top_clients"`
+	QueryTypes     []QueryTypeCount `json:"query_types"`
+	QueriesOverTime []TimeCount     `json:"queries_over_time"`
 }
 
 type DomainCount struct {
@@ -72,7 +71,7 @@ type Database struct {
 
 func New(dataDir string, logCfg config.LoggingConfig) (*Database, error) {
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create data dir: %w", err)
+		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
 
 	dbPath := filepath.Join(dataDir, "dns-supreme.db")
@@ -81,11 +80,17 @@ func New(dataDir string, logCfg config.LoggingConfig) (*Database, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	db.SetMaxOpenConns(1) // SQLite supports one writer at a time
-	db.SetMaxIdleConns(2)
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(0)
 
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("database not ready: %w", err)
+	}
+
+	// Enable foreign keys
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 
 	d := &Database{
@@ -101,83 +106,14 @@ func New(dataDir string, logCfg config.LoggingConfig) (*Database, error) {
 
 	go d.flushLoop()
 	d.startRetentionCleanup()
+	d.startAggregation()
 
-	slog.Info("SQLite database ready", "component", "db", "path", dbPath)
+	slog.Info("connected to SQLite", "component", "db", "path", dbPath)
 	return d, nil
 }
 
-func (d *Database) migrate() error {
-	schema := `
-	CREATE TABLE IF NOT EXISTS query_log (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		timestamp DATETIME NOT NULL DEFAULT (datetime('now')),
-		client_ip TEXT NOT NULL,
-		client_hostname TEXT DEFAULT '',
-		domain TEXT NOT NULL,
-		query_type TEXT NOT NULL,
-		blocked INTEGER NOT NULL DEFAULT 0,
-		block_rule TEXT DEFAULT '',
-		response_ip TEXT DEFAULT '',
-		latency_ms REAL DEFAULT 0,
-		upstream TEXT DEFAULT '',
-		protocol TEXT DEFAULT ''
-	);
-
-	CREATE INDEX IF NOT EXISTS idx_query_log_timestamp ON query_log (timestamp DESC);
-	CREATE INDEX IF NOT EXISTS idx_query_log_domain ON query_log (domain);
-	CREATE INDEX IF NOT EXISTS idx_query_log_client_ip ON query_log (client_ip);
-	CREATE INDEX IF NOT EXISTS idx_query_log_blocked ON query_log (blocked);
-
-	CREATE TABLE IF NOT EXISTS blocklists (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		url TEXT NOT NULL,
-		category TEXT DEFAULT 'uncategorized',
-		enabled INTEGER NOT NULL DEFAULT 1,
-		domain_count INTEGER NOT NULL DEFAULT 0,
-		last_updated DATETIME,
-		created_at DATETIME NOT NULL DEFAULT (datetime('now'))
-	);
-
-	CREATE TABLE IF NOT EXISTS users (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		username TEXT NOT NULL UNIQUE,
-		password_hash TEXT NOT NULL,
-		first_name TEXT NOT NULL DEFAULT '',
-		last_name TEXT NOT NULL DEFAULT '',
-		email TEXT NOT NULL DEFAULT '',
-		role TEXT NOT NULL DEFAULT 'viewer',
-		mfa_enabled INTEGER NOT NULL DEFAULT 0,
-		mfa_type TEXT NOT NULL DEFAULT '',
-		mfa_secret TEXT NOT NULL DEFAULT '',
-		recovery_codes TEXT DEFAULT '',
-		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
-		updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
-		last_login DATETIME
-	);
-
-	CREATE TABLE IF NOT EXISTS settings (
-		key TEXT PRIMARY KEY,
-		value TEXT NOT NULL,
-		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
-	);
-
-	CREATE TABLE IF NOT EXISTS audit_log (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		timestamp DATETIME NOT NULL DEFAULT (datetime('now')),
-		user_id INTEGER,
-		username TEXT,
-		action TEXT NOT NULL,
-		detail TEXT,
-		client_ip TEXT
-	);
-	CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log (timestamp DESC);
-	`
-	_, err := d.db.Exec(schema)
-	return err
-}
-
 func (d *Database) startRetentionCleanup() {
+	// Run immediately on startup, then every hour
 	d.cleanOldLogs()
 	ticker := time.NewTicker(1 * time.Hour)
 	go func() {
@@ -199,6 +135,145 @@ func (d *Database) cleanOldLogs() {
 	}
 	if rows, _ := result.RowsAffected(); rows > 0 {
 		slog.Info("retention cleanup completed", "component", "db", "deleted_rows", rows, "retention_days", d.cfg.RetentionDays)
+	}
+}
+
+func (d *Database) migrate() error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS query_log (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		timestamp DATETIME NOT NULL DEFAULT (datetime('now')),
+		client_ip TEXT NOT NULL,
+		domain TEXT NOT NULL,
+		query_type TEXT NOT NULL,
+		blocked INTEGER NOT NULL DEFAULT 0,
+		block_rule TEXT,
+		response_ip TEXT,
+		latency_ms REAL,
+		upstream TEXT,
+		protocol TEXT DEFAULT ''
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_query_log_timestamp ON query_log (timestamp DESC);
+	CREATE INDEX IF NOT EXISTS idx_query_log_domain ON query_log (domain);
+	CREATE INDEX IF NOT EXISTS idx_query_log_client_ip ON query_log (client_ip);
+	CREATE INDEX IF NOT EXISTS idx_query_log_blocked ON query_log (blocked);
+
+	CREATE TABLE IF NOT EXISTS blocklists (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL UNIQUE,
+		url TEXT NOT NULL,
+		enabled INTEGER NOT NULL DEFAULT 1,
+		domain_count INTEGER NOT NULL DEFAULT 0,
+		last_updated DATETIME,
+		created_at DATETIME NOT NULL DEFAULT (datetime('now'))
+	);
+
+	CREATE TABLE IF NOT EXISTS users (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		username TEXT NOT NULL UNIQUE,
+		password_hash TEXT NOT NULL,
+		first_name TEXT NOT NULL DEFAULT '',
+		last_name TEXT NOT NULL DEFAULT '',
+		email TEXT NOT NULL DEFAULT '',
+		role TEXT NOT NULL DEFAULT 'viewer',
+		mfa_enabled INTEGER NOT NULL DEFAULT 0,
+		mfa_type TEXT NOT NULL DEFAULT '',
+		mfa_secret TEXT NOT NULL DEFAULT '',
+		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+		updated_at DATETIME NOT NULL DEFAULT (datetime('now')),
+		last_login DATETIME
+	);
+
+	CREATE TABLE IF NOT EXISTS settings (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
+		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
+	);
+
+	CREATE TABLE IF NOT EXISTS audit_log (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		timestamp DATETIME NOT NULL DEFAULT (datetime('now')),
+		user_id INTEGER,
+		username TEXT,
+		action TEXT NOT NULL,
+		detail TEXT,
+		client_ip TEXT
+	);
+	CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log (timestamp DESC);
+
+	CREATE TABLE IF NOT EXISTS query_log_hourly (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		hour DATETIME NOT NULL,
+		client_ip TEXT NOT NULL,
+		domain TEXT NOT NULL,
+		query_type TEXT NOT NULL,
+		blocked INTEGER NOT NULL DEFAULT 0,
+		count INTEGER NOT NULL DEFAULT 1,
+		UNIQUE(hour, client_ip, domain, query_type, blocked)
+	);
+	CREATE INDEX IF NOT EXISTS idx_query_log_hourly_hour ON query_log_hourly (hour DESC);
+	`
+	_, err := d.db.Exec(schema)
+	if err != nil {
+		return err
+	}
+	// Add columns if missing (for upgrades) - SQLite doesn't support IF NOT EXISTS for columns
+	d.db.Exec("ALTER TABLE query_log ADD COLUMN protocol TEXT DEFAULT ''")
+	d.db.Exec("ALTER TABLE query_log ADD COLUMN client_hostname TEXT DEFAULT ''")
+	d.db.Exec("ALTER TABLE users ADD COLUMN recovery_codes TEXT DEFAULT ''")
+	d.db.Exec(`CREATE TABLE IF NOT EXISTS password_resets (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		token TEXT NOT NULL UNIQUE,
+		expires_at DATETIME NOT NULL,
+		used INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME NOT NULL DEFAULT (datetime('now'))
+	)`)
+	return d.migrateZones()
+}
+
+func (d *Database) startAggregation() {
+	// Run every hour
+	ticker := time.NewTicker(1 * time.Hour)
+	go func() {
+		// Initial delay to not conflict with startup
+		time.Sleep(5 * time.Minute)
+		d.aggregateOldLogs()
+		for range ticker.C {
+			d.aggregateOldLogs()
+		}
+	}()
+}
+
+func (d *Database) aggregateOldLogs() {
+	// Aggregate logs older than 24 hours into hourly summaries
+	cutoff := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
+
+	_, err := d.db.Exec(`
+		INSERT INTO query_log_hourly (hour, client_ip, domain, query_type, blocked, count)
+		SELECT strftime('%Y-%m-%dT%H:00:00Z', timestamp) as hour,
+		       client_ip, domain, query_type, blocked,
+		       COUNT(*) as count
+		FROM query_log
+		WHERE timestamp < ?
+		GROUP BY hour, client_ip, domain, query_type, blocked
+		ON CONFLICT (hour, client_ip, domain, query_type, blocked)
+		DO UPDATE SET count = query_log_hourly.count + excluded.count
+	`, cutoff)
+	if err != nil {
+		slog.Error("aggregation insert error", "component", "db", "error", err)
+		return
+	}
+
+	// Delete aggregated detailed rows
+	result, err := d.db.Exec("DELETE FROM query_log WHERE timestamp < ?", cutoff)
+	if err != nil {
+		slog.Error("aggregation cleanup error", "component", "db", "error", err)
+		return
+	}
+	if rows, _ := result.RowsAffected(); rows > 0 {
+		slog.Info("aggregated and removed old log entries", "component", "db", "deleted_rows", rows, "older_than", "24h")
 	}
 }
 
@@ -230,6 +305,13 @@ func (d *Database) flushLoop() {
 	}
 }
 
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 func (d *Database) flush() {
 	d.mu.Lock()
 	if len(d.buffer) == 0 {
@@ -258,11 +340,7 @@ func (d *Database) flush() {
 	defer stmt.Close()
 
 	for _, e := range entries {
-		blocked := 0
-		if e.Blocked {
-			blocked = 1
-		}
-		_, err := stmt.Exec(e.Timestamp.Format(time.RFC3339), e.ClientIP, e.ClientHostname, e.Domain, e.QueryType, blocked, e.BlockRule, e.ResponseIP, e.LatencyMs, e.Upstream, e.Protocol)
+		_, err := stmt.Exec(e.Timestamp.Format(time.RFC3339), e.ClientIP, e.ClientHostname, e.Domain, e.QueryType, boolToInt(e.Blocked), e.BlockRule, e.ResponseIP, e.LatencyMs, e.Upstream, e.Protocol)
 		if err != nil {
 			slog.Error("failed to insert query log", "component", "db", "error", err)
 		}
@@ -286,18 +364,16 @@ func (d *Database) GetQueryLogs(limit, offset int, domain, clientIP string, bloc
 		args = append(args, clientIP+"%")
 	}
 	if blocked != nil {
-		blockedInt := 0
-		if *blocked {
-			blockedInt = 1
-		}
 		where += " AND blocked = ?"
-		args = append(args, blockedInt)
+		args = append(args, boolToInt(*blocked))
 	}
 
+	// Count
 	var total int64
 	countQuery := "SELECT COUNT(*) FROM query_log " + where
 	d.db.QueryRow(countQuery, args...).Scan(&total)
 
+	// Fetch
 	query := fmt.Sprintf("SELECT id, timestamp, client_ip, COALESCE(client_hostname,''), domain, query_type, blocked, COALESCE(block_rule,''), COALESCE(response_ip,''), COALESCE(latency_ms,0), COALESCE(upstream,''), COALESCE(protocol,'') FROM query_log %s ORDER BY timestamp DESC LIMIT ? OFFSET ?", where)
 	args = append(args, limit, offset)
 
@@ -310,13 +386,13 @@ func (d *Database) GetQueryLogs(limit, offset int, domain, clientIP string, bloc
 	logs := make([]QueryLog, 0)
 	for rows.Next() {
 		var l QueryLog
-		var ts string
+		var tsStr string
 		var blockedInt int
-		err := rows.Scan(&l.ID, &ts, &l.ClientIP, &l.ClientHostname, &l.Domain, &l.QueryType, &blockedInt, &l.BlockRule, &l.ResponseIP, &l.LatencyMs, &l.Upstream, &l.Protocol)
+		err := rows.Scan(&l.ID, &tsStr, &l.ClientIP, &l.ClientHostname, &l.Domain, &l.QueryType, &blockedInt, &l.BlockRule, &l.ResponseIP, &l.LatencyMs, &l.Upstream, &l.Protocol)
 		if err != nil {
 			continue
 		}
-		l.Timestamp, _ = time.Parse(time.RFC3339, ts)
+		l.Timestamp, _ = time.Parse(time.RFC3339, tsStr)
 		l.Blocked = blockedInt != 0
 		logs = append(logs, l)
 	}
@@ -328,6 +404,7 @@ func (d *Database) GetStats(hours int) (*Stats, error) {
 	since := time.Now().Add(-time.Duration(hours) * time.Hour).Format(time.RFC3339)
 	stats := &Stats{}
 
+	// Total and blocked counts
 	d.db.QueryRow("SELECT COUNT(*) FROM query_log WHERE timestamp > ?", since).Scan(&stats.TotalQueries)
 	d.db.QueryRow("SELECT COUNT(*) FROM query_log WHERE timestamp > ? AND blocked = 1", since).Scan(&stats.BlockedQueries)
 	stats.AllowedQueries = stats.TotalQueries - stats.BlockedQueries
@@ -335,6 +412,7 @@ func (d *Database) GetStats(hours int) (*Stats, error) {
 		stats.BlockedPercent = float64(stats.BlockedQueries) / float64(stats.TotalQueries) * 100
 	}
 
+	// Top domains
 	stats.TopDomains = d.topDomains(since, false, 10)
 	stats.TopBlocked = d.topDomains(since, true, 10)
 
@@ -364,7 +442,7 @@ func (d *Database) GetStats(hours int) (*Stats, error) {
 	rows3, err := d.db.Query(`
 		SELECT strftime('%Y-%m-%dT%H:00:00Z', timestamp) as hour,
 			COUNT(*) as total,
-			SUM(CASE WHEN blocked = 1 THEN 1 ELSE 0 END) as blocked_count
+			SUM(CASE WHEN blocked = 1 THEN 1 ELSE 0 END) as blocked
 		FROM query_log
 		WHERE timestamp > ?
 		GROUP BY hour
@@ -374,9 +452,9 @@ func (d *Database) GetStats(hours int) (*Stats, error) {
 		defer rows3.Close()
 		for rows3.Next() {
 			var tc TimeCount
-			var ts string
-			rows3.Scan(&ts, &tc.Total, &tc.Blocked)
-			tc.Time, _ = time.Parse(time.RFC3339, ts)
+			var hourStr string
+			rows3.Scan(&hourStr, &tc.Total, &tc.Blocked)
+			tc.Time, _ = time.Parse(time.RFC3339, hourStr)
 			stats.QueriesOverTime = append(stats.QueriesOverTime, tc)
 		}
 	}
@@ -385,11 +463,8 @@ func (d *Database) GetStats(hours int) (*Stats, error) {
 }
 
 func (d *Database) topDomains(since string, blocked bool, limit int) []DomainCount {
-	blockedInt := 0
-	if blocked {
-		blockedInt = 1
-	}
-	rows, err := d.db.Query("SELECT domain, COUNT(*) as cnt FROM query_log WHERE timestamp > ? AND blocked = ? GROUP BY domain ORDER BY cnt DESC LIMIT ?", since, blockedInt, limit)
+	query := "SELECT domain, COUNT(*) as cnt FROM query_log WHERE timestamp > ? AND blocked = ? GROUP BY domain ORDER BY cnt DESC LIMIT ?"
+	rows, err := d.db.Query(query, since, boolToInt(blocked), limit)
 	if err != nil {
 		return nil
 	}
@@ -404,6 +479,18 @@ func (d *Database) topDomains(since string, blocked bool, limit int) []DomainCou
 	return result
 }
 
+func (d *Database) QueryRow(query string, args ...interface{}) *sql.Row {
+	return d.db.QueryRow(query, args...)
+}
+
+func (d *Database) Exec(query string, args ...interface{}) (sql.Result, error) {
+	return d.db.Exec(query, args...)
+}
+
+func (d *Database) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	return d.db.Query(query, args...)
+}
+
 func (d *Database) Ping() error {
 	return d.db.Ping()
 }
@@ -411,39 +498,4 @@ func (d *Database) Ping() error {
 func (d *Database) Close() {
 	d.flush()
 	d.db.Close()
-}
-
-// LogAudit records an audit log entry
-func (d *Database) LogAudit(userID int, username, action, detail, clientIP string) {
-	d.db.Exec("INSERT INTO audit_log (user_id, username, action, detail, client_ip) VALUES (?, ?, ?, ?, ?)",
-		userID, username, action, detail, clientIP)
-}
-
-func (d *Database) GetAuditLogs(limit, offset int) ([]map[string]interface{}, int64, error) {
-	var total int64
-	d.db.QueryRow("SELECT COUNT(*) FROM audit_log").Scan(&total)
-
-	rows, err := d.db.Query("SELECT id, timestamp, COALESCE(user_id,0), COALESCE(username,''), action, COALESCE(detail,''), COALESCE(client_ip,'') FROM audit_log ORDER BY timestamp DESC LIMIT ? OFFSET ?", limit, offset)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer rows.Close()
-
-	entries := make([]map[string]interface{}, 0)
-	for rows.Next() {
-		var id int64
-		var ts, username, action, detail, clientIP string
-		var userID int
-		rows.Scan(&id, &ts, &userID, &username, &action, &detail, &clientIP)
-		entries = append(entries, map[string]interface{}{
-			"id":        id,
-			"timestamp": ts,
-			"user_id":   userID,
-			"username":  username,
-			"action":    action,
-			"detail":    detail,
-			"client_ip": clientIP,
-		})
-	}
-	return entries, total, nil
 }

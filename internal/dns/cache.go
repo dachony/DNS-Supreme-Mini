@@ -5,14 +5,14 @@ import (
 	"sync"
 	"time"
 
-	mdns "github.com/miekg/dns"
+	"github.com/miekg/dns"
 )
 
 type cacheEntry struct {
-	msg       *mdns.Msg
+	msg       *dns.Msg
 	expiresAt time.Time
 	key       string
-	index     int
+	index     int // heap index
 }
 
 type expiryHeap []*cacheEntry
@@ -49,7 +49,7 @@ func NewCache(maxSize int) *Cache {
 	return c
 }
 
-func (c *Cache) Get(key string) (*mdns.Msg, bool) {
+func (c *Cache) Get(key string) (*dns.Msg, bool) {
 	c.mu.RLock()
 	entry, ok := c.entries[key]
 	c.mu.RUnlock()
@@ -66,10 +66,11 @@ func (c *Cache) Get(key string) (*mdns.Msg, bool) {
 	return entry.msg.Copy(), true
 }
 
-func (c *Cache) Set(key string, msg *mdns.Msg, ttl time.Duration) {
+func (c *Cache) Set(key string, msg *dns.Msg, ttl time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// Update existing entry
 	if existing, ok := c.entries[key]; ok {
 		existing.msg = msg.Copy()
 		existing.expiresAt = time.Now().Add(ttl)
@@ -77,6 +78,7 @@ func (c *Cache) Set(key string, msg *mdns.Msg, ttl time.Duration) {
 		return
 	}
 
+	// Evict oldest if at capacity
 	for len(c.entries) >= c.maxSize && c.heap.Len() > 0 {
 		oldest := heap.Pop(&c.heap).(*cacheEntry)
 		delete(c.entries, oldest.key)

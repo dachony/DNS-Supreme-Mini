@@ -17,6 +17,7 @@ import (
 
 var jwtSecret []byte
 
+// InitSecret loads or generates the JWT secret, persisting it in the database.
 func InitSecret(getSetting func(string) string, setSetting func(string, string) error) {
 	if s := getSetting("jwt_secret"); s != "" {
 		jwtSecret, _ = hex.DecodeString(s)
@@ -29,6 +30,7 @@ func InitSecret(getSetting func(string) string, setSetting func(string, string) 
 
 func getSecret() []byte {
 	if jwtSecret == nil {
+		// Fallback: generate ephemeral secret if InitSecret was not called.
 		jwtSecret = make([]byte, 32)
 		rand.Read(jwtSecret)
 	}
@@ -97,6 +99,7 @@ func ValidateToken(token string) (*TokenClaims, error) {
 	}, nil
 }
 
+// ValidateTokenPartial validates a token without requiring MFA to be done
 func ValidateTokenPartial(token string) (*TokenClaims, error) {
 	return ValidateToken(token)
 }

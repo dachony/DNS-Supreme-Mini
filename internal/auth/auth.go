@@ -13,6 +13,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// ValidatePassword checks if password meets minimum requirements
 func ValidatePassword(password string) error {
 	if len(password) < 8 {
 		return fmt.Errorf("password must be at least 8 characters")
@@ -42,6 +43,8 @@ func HashPassword(password string) (string, error) {
 func CheckPassword(hash, password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
+
+// TOTP implementation
 
 func GenerateTOTPSecret() (string, error) {
 	secret := make([]byte, 20)
@@ -74,6 +77,7 @@ func GenerateTOTPCode(secret string, t time.Time) (string, error) {
 
 func VerifyTOTP(secret, code string) bool {
 	now := time.Now()
+	// Check current, previous, and next time step (±30s window)
 	for _, offset := range []time.Duration{0, -30 * time.Second, 30 * time.Second} {
 		expected, err := GenerateTOTPCode(secret, now.Add(offset))
 		if err != nil {
@@ -86,6 +90,7 @@ func VerifyTOTP(secret, code string) bool {
 	return false
 }
 
+// GenerateEmailCode creates a random 6-digit code for email MFA
 func GenerateEmailCode() string {
 	b := make([]byte, 4)
 	rand.Read(b)
@@ -93,6 +98,7 @@ func GenerateEmailCode() string {
 	return fmt.Sprintf("%06d", code)
 }
 
+// GenerateRecoveryCodes creates 8 one-time recovery codes
 func GenerateRecoveryCodes() []string {
 	codes := make([]string, 8)
 	for i := range codes {
@@ -101,6 +107,13 @@ func GenerateRecoveryCodes() []string {
 		codes[i] = fmt.Sprintf("%04x-%04x", binary.BigEndian.Uint16(b[:2]), binary.BigEndian.Uint16(b[2:]))
 	}
 	return codes
+}
+
+// GenerateResetToken creates a URL-safe random token for password reset
+func GenerateResetToken() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(b)
 }
 
 func TOTPProvisioningURI(secret, username, issuer string) string {

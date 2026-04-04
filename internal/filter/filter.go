@@ -26,13 +26,13 @@ type filterCacheEntry struct {
 type Category string
 
 const (
-	CategoryAds           Category = "ads"
-	CategoryMalware       Category = "malware"
-	CategoryAdult         Category = "adult"
-	CategorySocial        Category = "social"
-	CategoryGambling      Category = "gambling"
-	CategoryTracking      Category = "tracking"
-	CategoryCustom        Category = "custom"
+	CategoryAds       Category = "ads"
+	CategoryMalware   Category = "malware"
+	CategoryAdult     Category = "adult"
+	CategorySocial    Category = "social"
+	CategoryGambling  Category = "gambling"
+	CategoryTracking  Category = "tracking"
+	CategoryCustom    Category = "custom"
 	CategoryUncategorized Category = "uncategorized"
 )
 
@@ -50,17 +50,22 @@ type domainEntry struct {
 }
 
 type Engine struct {
-	domains            map[string]domainEntry
+	domains            map[string]domainEntry // domain -> entry
 	allowlist          map[string]bool
-	customList         map[string]string
+	customList         map[string]string      // domain -> reason
 	lists              []BlockList
 	disabledCategories map[Category]bool
+	geoBlockedCountries map[string]bool       // country code -> blocked
+	geoLookup          GeoLookupFunc
 	serviceBlocker     *ServiceBlocker
-	mode               string
+	mode               string                // "blocklist" or "allowlist"
 	mu                 sync.RWMutex
 	filterCache        map[string]filterCacheEntry
 	filterCacheMu      sync.RWMutex
 }
+
+// GeoLookupFunc resolves an IP to a country code
+type GeoLookupFunc func(ip string) string
 
 func NewEngine() *Engine {
 	return &Engine{
@@ -69,12 +74,14 @@ func NewEngine() *Engine {
 		customList:         make(map[string]string),
 		lists:              make([]BlockList, 0),
 		disabledCategories: make(map[Category]bool),
+		geoBlockedCountries: make(map[string]bool),
 		serviceBlocker:     NewServiceBlocker(),
 		mode:               "blocklist",
 		filterCache:        make(map[string]filterCacheEntry),
 	}
 }
 
+// ServiceBlocker returns the service blocker instance
 func (e *Engine) ServiceBlocker() *ServiceBlocker {
 	return e.serviceBlocker
 }
@@ -92,9 +99,16 @@ func (e *Engine) SetMode(mode string) {
 	e.clearFilterCache()
 }
 
+func (e *Engine) SetGeoLookup(fn GeoLookupFunc) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.geoLookup = fn
+}
+
 func (e *Engine) Check(domain string, qtype uint16) (blocked bool, rule string) {
 	domain = strings.TrimSuffix(strings.ToLower(domain), ".")
 
+	// Check filter cache
 	e.filterCacheMu.RLock()
 	if entry, ok := e.filterCache[domain]; ok && time.Since(entry.addedAt) < filterCacheTTL {
 		e.filterCacheMu.RUnlock()
@@ -102,6 +116,7 @@ func (e *Engine) Check(domain string, qtype uint16) (blocked bool, rule string) 
 	}
 	e.filterCacheMu.RUnlock()
 
+	// Cache result on return
 	defer func() {
 		e.filterCacheMu.Lock()
 		if len(e.filterCache) >= filterCacheSize {
@@ -119,6 +134,7 @@ func (e *Engine) Check(domain string, qtype uint16) (blocked bool, rule string) 
 		if e.allowlist[domain] {
 			return false, ""
 		}
+		// Check parent domains for allowlist
 		parts := strings.Split(domain, ".")
 		for i := 1; i < len(parts)-1; i++ {
 			if e.allowlist[strings.Join(parts[i:], ".")] {
@@ -128,12 +144,14 @@ func (e *Engine) Check(domain string, qtype uint16) (blocked bool, rule string) 
 		return true, "allowlist mode: domain not on allowlist"
 	}
 
-	// Blocklist mode (default)
+	// Blocklist mode (default): allow everything EXCEPT blocked domains
+
+	// Allowlist takes priority
 	if e.allowlist[domain] {
 		return false, ""
 	}
 
-	// Service blocking
+	// Service blocking (check before blocklists)
 	if e.serviceBlocker != nil {
 		if svcBlocked, svcRule := e.serviceBlocker.Check(domain); svcBlocked {
 			return true, svcRule
@@ -166,8 +184,28 @@ func (e *Engine) clearFilterCache() {
 	e.filterCacheMu.Unlock()
 }
 
+// ClearFilterCache clears the filter cache (public)
 func (e *Engine) ClearFilterCache() {
 	e.clearFilterCache()
+}
+
+// CheckGeo checks if a client IP should be blocked by geo policy
+func (e *Engine) CheckGeo(clientIP string) (blocked bool, country string) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	if e.geoLookup == nil || len(e.geoBlockedCountries) == 0 {
+		return false, ""
+	}
+
+	cc := e.geoLookup(clientIP)
+	if cc == "" {
+		return false, ""
+	}
+	if e.geoBlockedCountries[cc] {
+		return true, cc
+	}
+	return false, cc
 }
 
 // --- Category management ---
@@ -199,6 +237,27 @@ func (e *Engine) GetCategories() map[Category]bool {
 	}
 	for cat := range e.disabledCategories {
 		result[cat] = false
+	}
+	return result
+}
+
+// --- Geo management ---
+
+func (e *Engine) SetGeoBlocked(countryCodes []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.geoBlockedCountries = make(map[string]bool)
+	for _, cc := range countryCodes {
+		e.geoBlockedCountries[strings.ToUpper(cc)] = true
+	}
+}
+
+func (e *Engine) GetGeoBlocked() []string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	result := make([]string, 0, len(e.geoBlockedCountries))
+	for cc := range e.geoBlockedCountries {
+		result = append(result, cc)
 	}
 	return result
 }
@@ -265,6 +324,7 @@ func (e *Engine) GetLists() []BlockList {
 	return result
 }
 
+// GetListDomains returns a sample of domains from a specific list (max 200)
 func (e *Engine) GetListDomains(listName string, max int) []string {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
