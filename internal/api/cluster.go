@@ -216,3 +216,16 @@ func (s *Server) getClusterFromDB() {
 		settingsMu.Unlock()
 	}
 }
+
+func (s *Server) loadIdentityFromDB() {
+	if v := s.db.GetSetting("hostname"); v != "" {
+		settingsMu.Lock()
+		hostnameStore = v
+		settingsMu.Unlock()
+	}
+	if v := s.db.GetSetting("primary_domain"); v != "" {
+		settingsMu.Lock()
+		primaryDomainStore = v
+		settingsMu.Unlock()
+	}
+}

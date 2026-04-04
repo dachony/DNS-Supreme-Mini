@@ -1199,6 +1199,8 @@ const activeTab = ref('identity')
 
 watch(activeTab, (tab) => {
   if (tab === 'users') { loadUsers(); loadMe() }
+  if (tab === 'certs') { loadCertZones(); loadAcmeConfig(); loadAcmeStatus() }
+  if (tab === 'blockpage') { loadBpZones() }
 })
 
 const settingsTabs = [
@@ -1682,13 +1684,17 @@ async function pollAcmeStatus(domain: string) {
 }
 
 async function applyAcmeCert() {
-  acmeMsg.value = 'Applying certificate and restarting...'
+  acmeMsg.value = 'Applying certificate and reloading TLS...'
   try {
     await axios.post('/api/restart')
   } catch {}
-  await waitForServer()
-  acmeMsg.value = 'Certificate applied. Server restarted.'
-  loadAll()
+  // Wait a moment for TLS reload, then refresh cert info
+  await new Promise(r => setTimeout(r, 2000))
+  try {
+    const { data } = await axios.get('/api/certs')
+    certInfo.value = data
+  } catch {}
+  acmeMsg.value = 'Certificate applied successfully.'
   setTimeout(() => acmeMsg.value = '', 5000)
 }
 
@@ -2283,7 +2289,7 @@ onMounted(async () => {
   }
   await loadAll()
   loadUsers(); loadMe(); loadCertZones(); loadFail2Ban(); loadMailSettings(); loadAcmeConfig()
-  loadBpZones()
+  await loadBpZones()
   nextTick(() => loadAcmeStatus())
   // Parse existing bpDomain into prefix + zone
   if (bpDomain.value && bpDomain.value.includes('.')) {

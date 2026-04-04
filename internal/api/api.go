@@ -79,6 +79,7 @@ func NewServer(cfg config.APIConfig, database *db.Database, filterEngine *filter
 	s.LoadBlockPageTemplate()
 	s.loadACMEConfig()
 	s.getClusterFromDB()
+	s.loadIdentityFromDB()
 	s.setupRoutes()
 	go s.broadcastStats()
 	return s
@@ -332,13 +333,13 @@ func (s *Server) restartServer(c *gin.Context) {
 	slog.Info("server restart requested via API", "component", "api")
 	c.JSON(http.StatusOK, gin.H{"status": "restarting"})
 
-	// Full restart: send SIGTERM so Docker restarts the container
+	// Send SIGHUP to reload TLS certificates without killing the container
 	go func() {
 		time.Sleep(500 * time.Millisecond)
 		p, err := os.FindProcess(os.Getpid())
 		if err == nil {
-			slog.Info("sending SIGTERM for full restart", "component", "api")
-			p.Signal(syscall.SIGTERM)
+			slog.Info("sending SIGHUP for TLS reload", "component", "api")
+			p.Signal(syscall.SIGHUP)
 		}
 	}()
 }

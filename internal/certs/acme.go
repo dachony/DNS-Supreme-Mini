@@ -253,14 +253,11 @@ func (a *ACMEClient) RequestCertificate(domain string) error {
 	pem.Encode(keyFile, &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 	keyFile.Close()
 
-	// Only copy as server.crt if no server cert exists yet
-	// (block page certs should NOT overwrite the main server cert)
+	// Always copy as server.crt so the main TLS uses the latest ACME cert
 	serverCert := filepath.Join(a.certDir, "server.crt")
 	serverKey := filepath.Join(a.certDir, "server.key")
-	if _, err := os.Stat(serverCert); os.IsNotExist(err) {
-		copyFile(certPath, serverCert)
-		copyFile(keyPath, serverKey)
-	}
+	copyFile(certPath, serverCert)
+	copyFile(keyPath, serverKey)
 
 	slog.Info("certificate obtained", "component", "acme", "domain", domain, "path", certPath)
 	return nil
