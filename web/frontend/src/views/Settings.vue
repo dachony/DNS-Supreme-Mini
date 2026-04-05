@@ -757,6 +757,21 @@
         </div>
       </div>
 
+      <!-- Redirect URL -->
+      <div class="settings-card" style="margin-bottom:16px">
+        <h4>Block Page Redirect</h4>
+        <p class="section-desc">Redirect blocked requests to an external URL instead of the built-in block page. Leave empty to use the built-in page.</p>
+        <div class="field" style="max-width:500px">
+          <label>Redirect URL</label>
+          <input v-model="bpRedirectURL" placeholder="https://block.example.com or leave empty for built-in page" />
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+          <button @click="saveBlockPageRedirect" class="btn-primary">Save Redirect</button>
+          <button v-if="bpRedirectURL" @click="bpRedirectURL = ''; saveBlockPageRedirect()" class="btn-secondary">Clear</button>
+        </div>
+        <p v-if="bpRedirectMsg" class="msg-success" style="margin-top:8px">{{ bpRedirectMsg }}</p>
+      </div>
+
       <div class="bp-split">
         <!-- Left: Builder -->
         <div class="bp-builder">
@@ -1198,9 +1213,11 @@ const requestRestart = inject('requestRestart') as () => void
 const activeTab = ref('identity')
 
 watch(activeTab, (tab) => {
+  if (tab === 'identity') { loadIdentity() }
   if (tab === 'users') { loadUsers(); loadMe() }
-  if (tab === 'certs') { loadCertZones(); loadAcmeConfig(); loadAcmeStatus() }
-  if (tab === 'blockpage') { loadBpZones() }
+  if (tab === 'certs') { loadCertsTab() }
+  if (tab === 'blockpage') { loadBlockPageTab() }
+  if (tab === 'forwarders') { loadForwarders() }
 })
 
 const settingsTabs = [
@@ -1942,6 +1959,62 @@ async function waitForServer() {
       return
     } catch {}
   }
+}
+
+async function loadIdentity() {
+  try {
+    const [hn, pd] = await Promise.all([
+      axios.get('/api/settings/hostname'),
+      axios.get('/api/settings/primary-domain'),
+    ])
+    hostname.value = hn.data.hostname || 'ns1.dnssupreme.local'
+    primaryDomain.value = pd.data.domain || 'dnssupreme.local'
+  } catch {}
+}
+
+async function loadCertsTab() {
+  try {
+    const { data } = await axios.get('/api/certs')
+    certInfo.value = data
+  } catch {}
+  loadCertZones(); loadAcmeConfig(); loadAcmeStatus()
+}
+
+async function loadForwarders() {
+  try {
+    const { data } = await axios.get('/api/settings/forwarders')
+    forwarders.value = data || []
+  } catch {}
+}
+
+async function loadBlockPageTab() {
+  try {
+    const [bp, bpd, bpr] = await Promise.all([
+      axios.get('/api/settings/blockpage'),
+      axios.get('/api/settings/blockpage/domain'),
+      axios.get('/api/settings/blockpage/redirect'),
+    ])
+    blockPageHTML.value = bp.data.html || ''
+    bpDomain.value = bpd.data.domain || ''
+    bpRedirectURL.value = bpr.data.redirect_url || ''
+    if (bp.data.settings) {
+      const s = bp.data.settings
+      if (s.logo) bpLogo.value = s.logo
+      if (s.heading) bpHeading.value = s.heading
+      if (s.message) bpMessage.value = s.message
+      if (s.footer) bpFooter.value = s.footer
+      if (s.description) bpDescription.value = s.description
+      if (s.color) bpColor.value = s.color
+    }
+    // Parse bpDomain into prefix + zone
+    if (bpDomain.value && bpDomain.value.includes('.')) {
+      const dot = bpDomain.value.indexOf('.')
+      bpPrefix.value = bpDomain.value.substring(0, dot)
+      bpZone.value = bpDomain.value.substring(dot + 1)
+    }
+  } catch {}
+  await loadBpZones()
+  checkBpCertStatus()
 }
 
 function cancelMgmtHttps() {
