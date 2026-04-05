@@ -106,6 +106,19 @@ docker run -d \
 
 8. Access the web UI at `https://172.17.0.2:5380` — login with `admin` / `admin`.
 
+### Updating the Container
+
+**Important:** If MikroTik uses this container as its DNS server, you must temporarily switch to an external DNS before pulling a new image (otherwise the router can't resolve the Docker registry):
+
+```
+/ip/dns/set servers=8.8.8.8
+/container/stop 0
+/container/remove 0
+/container/add remote-image=dachony/dnssuprememini:latest interface=veth-dns root-dir=disk1/dns-container mounts=dns-data envlist=dns-env logging=yes
+/container/start 0
+/ip/dns/set servers=172.17.0.2
+```
+
 ## Environment Variables
 
 | Variable | Default | Description |
